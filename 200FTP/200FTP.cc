@@ -14,6 +14,21 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE(THIS_SCRIPT);
 
+// ABB qdisc requires a flow table that specifies flow ids and weights
+struct FlowTableEntry
+{
+    /// Flow id (for human eyes only)
+    uint32_t m_id;
+    // - better match it with the same id given by flow monitor
+
+    // We will only deal with IPv4 address for now
+    uint32_t m_srcAddr;
+    uint32_t m_dstAddr;
+
+    /// The flow weight
+    double m_weight;
+};
+
 // default script settings
 uint32_t simTime   = 10;        // simulation time in seconds
 bool simParamsPrint = true;     // simulation parameters displayed
@@ -27,6 +42,8 @@ uint32_t qdQSize    = 1000;     // queue disc queue size in packets (NS3 default
 std::string devQType;           // device queue type (NS3 default to DropTail)
 uint32_t devQSize   = 100;      // device queue size in packets (NS3 default to 100 packets)
 uint32_t holdTime   = 5;        // hold time for device queue (in unit of ms)
+std::string flowTableFileName = "abb-flow-table.csv";   // for ABB queue disc only
+std::vector<FlowTableEntry> flowTable;                  // for ABB queue disc only
 
 // supported names of queue disciplines
 //  To use these qdiscs, you must specifiy proper qdisc queue
@@ -37,17 +54,86 @@ uint32_t holdTime   = 5;        // hold time for device queue (in unit of ms)
 //      "Codel"     -- use ns3::CoDelQueueDisc
 //      "Pie"       -- use ns3::PieQueueDis
 //      "FqCodel"   -- use ns3::FqCoDelQueueDisc
+//      "ABBCoDel"  -- use ns3::ABBCoDelQueueDisc
 //      
 
 static void
 heartbeat()
 {
     Time now = Simulator::Now();
-    std::cout << "Heart Beat: " << now << std::endl;
+    NS_LOG_INFO("Heart Beat: " << now);
     if (now <= Seconds(simTime - 1))
     {
         Simulator::Schedule(Seconds(1), &heartbeat);
     }
+}
+
+// Callback for ABBCoDelQueueDisc to find flow ID
+static uint32_t
+GetFlowId(Ptr<QueueDiscItem> item)
+{
+    // Is it an ArpQueueDiscItem?
+    Ptr<ArpQueueDiscItem> arpItem = DynamicCast<ArpQueueDiscItem>(item);
+    if (arpItem != nullptr) {
+        NS_LOG_DEBUG("ARP packet");
+        // treat ARP as from flow 0
+        return 0;
+    }
+
+    // Is it an Ipv4QueueDiscItem?
+    Ptr<Ipv4QueueDiscItem> ipv4Item = DynamicCast<Ipv4QueueDiscItem>(item);
+    if (ipv4Item != nullptr) {
+        NS_LOG_DEBUG("IPv4 packet");
+        const Ipv4Header& hdr = ipv4Item->GetHeader();
+        uint32_t srcIpAddr = hdr.GetSource().Get();
+        uint32_t dstIpAddr = hdr.GetDestination().Get();
+
+        for (FlowTableEntry& e : flowTable) {
+            if (e.m_srcAddr == srcIpAddr && e.m_dstAddr == dstIpAddr) {
+                return e.m_id;
+            }
+        }
+
+        NS_FATAL_ERROR("cannot find flow id");
+    }
+
+    // This script doesn't use IPv6
+    NS_ABORT_MSG("unexpected types of queue disc item");
+
+    return 0;
+}
+
+// Callback for ABBCoDelQueueDisc to find flow weight
+static double
+GetFlowWeight(Ptr<QueueDiscItem> item)
+{
+    // Is it an ArpQueueDiscItem?
+    Ptr<ArpQueueDiscItem> arpItem = DynamicCast<ArpQueueDiscItem>(item);
+    if (arpItem != nullptr) {
+        // treat ARP as from flow 0 and set its weight to 0.1 (very low)
+        return 0.1;
+    }
+
+    // Is it an Ipv4QueueDiscItem?
+    Ptr<Ipv4QueueDiscItem> ipv4Item = DynamicCast<Ipv4QueueDiscItem>(item);
+    if (ipv4Item != nullptr) {
+        const Ipv4Header& hdr = ipv4Item->GetHeader();
+        uint32_t srcIpAddr = hdr.GetSource().Get();
+        uint32_t dstIpAddr = hdr.GetDestination().Get();
+
+        for (FlowTableEntry& e : flowTable) {
+            if (e.m_srcAddr == srcIpAddr && e.m_dstAddr == dstIpAddr) {
+                return e.m_weight;
+            }
+        }
+        
+        NS_FATAL_ERROR("cannot find flow id");
+    }
+
+    // This script doesn't use IPv6
+    NS_LOG_WARN("unexpected types of queue disc item");
+
+    return 1.0;
 }
 
 int
@@ -64,7 +150,7 @@ main(int argc, char* argv[])
     cmd.AddValue("tracing", "Turn on tracing if true", tracing);
     cmd.AddValue("nFTPs", "Number of FTP flows", nFTPs);
     cmd.AddValue("nLanNodes", "Number of LAN nodes on local net", nLanNodes);
-    cmd.AddValue("qdType", "Qdisc type", qdType);
+    cmd.AddValue("qdType", "Qdisc type (set to DropTail for now or not set at all)", qdType);
     cmd.AddValue("qdQSize", "Qdisc queue size", qdQSize);
     cmd.AddValue("devQType", "Device queue type", devQType);
     cmd.AddValue("devQSize", "Device queue size", devQSize);
@@ -78,6 +164,7 @@ main(int argc, char* argv[])
     if (simParamsPrint) {
         std::cout << "Simulation parameters" << std::endl;
         std::cout << "simTime = " << simTime << std::endl;
+        std::cout << "heartBeatOn = " << heartBeatOn << std::endl;
         std::cout << "pingOn = " << pingOn << std::endl;
         std::cout << "tracing = " << tracing << std::endl;
         std::cout << "nFTPs = " << nFTPs << std::endl;
@@ -86,6 +173,7 @@ main(int argc, char* argv[])
         std::cout << "qdQSize = " << qdQSize << std::endl;
         std::cout << "devQType = " << devQType << std::endl;
         std::cout << "devQSize = " << devQSize << std::endl;
+        std::cout << "holdTime = " << holdTime << std::endl;
     }
 
     //
@@ -143,14 +231,12 @@ main(int argc, char* argv[])
     // propagation delay is set to 20ns per foot for a 100 meter cable
     //  (100m = 328ft, 328 x 20ns = 6560ns or 6.56us)
     // this delay is low but CSMA delay (sensing, back-off, etc.) can be much higher
-    if (devQType.length() != 0) {
+    if (devQType.length() == 0 || devQType == "DropTail") {
+        csmaHelper.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(std::to_string(devQSize)+"p"));
+    } else {
         NS_LOG_ERROR(THIS_SCRIPT " Only the default device queue type (DropTail) is supported.");
         std::cout << "Only the default device queue type (DropTail) is supported." << std::endl;
         exit(-1);
-    }
-    else
-    {
-        csmaHelper.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(std::to_string(devQSize)+"p"));
     }
     NetDeviceContainer lanNodesNetDevices;
     lanNodesNetDevices = csmaHelper.Install(lanNodes);
@@ -169,7 +255,54 @@ main(int argc, char* argv[])
 
     TrafficControlHelper tch;
     if (qdType.length() != 0) {
-        tch.SetRootQueueDisc("ns3::"+qdType+"QueueDisc", "MaxSize", StringValue(std::to_string(qdQSize)+"p"));
+        // Different qdisc may require different parameters
+        // The SetRootQueueDisc method can accept all sorts, varying number of config parameters!!
+        if (qdType == "FqCoDel") {
+            tch.SetRootQueueDisc("ns3::FqCoDelQueueDisc", 
+                                "MaxSize", StringValue(std::to_string(qdQSize)+"p"),
+                                "DropBatchSize", UintegerValue(16));
+            // TODO: should we turn off ECN?
+        } else if (qdType == "ABBCoDel") {
+            // read flow table from a flow table file
+            std::cout << "flowTable = " << flowTableFileName << std::endl;
+            std::ifstream fin(flowTableFileName);
+            char temp[255];
+            while (fin.getline(temp, 255)) {
+                if (temp[0] < '0' || temp[0] > '9')     // skip header/comment lines
+                    continue;
+                uint32_t flowId;
+                uint32_t a1,a2,a3,a4;
+                uint32_t b1,b2,b3,b4;
+                double flowWeight;
+                sscanf(temp, "%u,%u.%u.%u.%u,%u.%u.%u.%u,%lf", 
+                        &flowId, &a1, &a2, &a3, &a4,
+                        &b1, &b2, &b3, &b4, &flowWeight);
+
+                FlowTableEntry entry;
+                entry.m_id = flowId;
+                entry.m_srcAddr = ((a1*256 + a2)*256 + a3)*256 + a4;
+                entry.m_dstAddr = ((b1*256 + b2)*256 + b3)*256 + b4;
+                entry.m_weight = flowWeight;
+                flowTable.push_back(entry);
+            }
+            //for (FlowTableEntry& e : flowTable) {
+            //    std::cout << e.m_id << "," << e.m_srcAddr << "," << e.m_dstAddr 
+            //                << "," << e.m_weight << std::endl;
+            //}
+            std::cout << "Finished loading flow table" << std::endl;
+
+            tch.SetRootQueueDisc("ns3::ABBCoDelQueueDisc", 
+                                "MaxSize", StringValue(std::to_string(qdQSize)+"p"),
+                                "DropBatchSize", UintegerValue(16),
+                                "FlowIdCb", CallbackValue(MakeCallback<uint32_t,Ptr<QueueDiscItem>>(&GetFlowId)),
+                                "FlowWeightCb", CallbackValue(MakeCallback<double,Ptr<QueueDiscItem>>(&GetFlowWeight)));
+            // TODO: should we turn off ECN?
+            // TODO: we need to set channel bandwidth (default 1000 mbps)
+            // TODO: set number of bins (default 5), reclassification interval (default 1s)
+        } else {
+            tch.SetRootQueueDisc("ns3::"+qdType+"QueueDisc", 
+                                "MaxSize", StringValue(std::to_string(qdQSize)+"p"));
+        }
 
         // Enable BQL on netdevice queue
         tch.SetQueueLimits("ns3::DynamicQueueLimits", "HoldTime", StringValue(std::to_string(holdTime)+"ms"));
@@ -236,7 +369,7 @@ main(int argc, char* argv[])
         BulkSendHelper ftpSourceHelper("ns3::TcpSocketFactory",
                 InetSocketAddress(lanNodesInetInterfaces.GetAddress(i+1), port));
         ftpSourceHelper.SetAttribute("MaxBytes", UintegerValue(maxBytes));
-        //ftpSourceHelper.SetAttribute("SendSize", UintegerValue(1400));
+        //ftpSourceHelper.SetAttribute("SendSize", UintegerValue(1400));  // by default, 512
         ApplicationContainer ftpSourceApps = ftpSourceHelper.Install(ftpNodes.Get(i));
         ftpSourceApps.Start(Seconds(0.1));
         ftpSourceApps.Stop(Seconds(simTime));
@@ -286,10 +419,6 @@ main(int argc, char* argv[])
     flowMonitor->SerializeToXmlFile("results.xml", true, true);
     
 	Simulator::Destroy();
-
-	//for (uint32_t i=0; i<allSinkApps.GetN(); i++) {
-	//	std::cout << DynamicCast<PacketSink>(allSinkApps.Get(i))->GetTotalRx() << std::endl;
-	//}
 
 	NS_LOG_INFO(THIS_SCRIPT " ends now.");
 
