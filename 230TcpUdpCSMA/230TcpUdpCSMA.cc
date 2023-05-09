@@ -68,8 +68,9 @@ if (useTcp)
 {
     //Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpHighSpeed"));
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1436));     // default 536
-    Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(131072*2));   // default 131072
-    Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(131072*2));   // default 131072
+    Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(1310720*5));   // default 131072
+    Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(1310720*5));   // default 131072
+    Config::SetDefault("ns3::BulkSendApplication::SendSize", UintegerValue(1436*2));    // default 512
 }
 else
 {
@@ -85,8 +86,9 @@ else
 
     NS_LOG_INFO("Create channel between the two nodes.");
     CsmaHelper csma;
-    csma.SetChannelAttribute("DataRate", DataRateValue(DataRate(100000000)));
-    csma.SetChannelAttribute("Delay", TimeValue(MicroSeconds(50)));
+    //csma.SetChannelAttribute("DataRate", DataRateValue(DataRate(100000000)));
+    csma.SetChannelAttribute("DataRate", StringValue("1Gbps"));
+    csma.SetChannelAttribute("Delay", TimeValue(NanoSeconds(503)));
     //csma.SetDeviceAttribute("Mtu", UintegerValue(1400));
     NetDeviceContainer d = csma.Install(n);
 
@@ -151,7 +153,7 @@ else
 
     NS_LOG_INFO("Create UdpClient application on node 0 to send to node 1.");
     uint32_t MaxPacketSize = 1436;
-    Time interPacketInterval = MicroSeconds(200);
+    Time interPacketInterval = MicroSeconds(10);
     uint32_t maxPacketCount = 0;
     UdpClientHelper client(serverAddress, port);
     client.SetAttribute("MaxPackets", UintegerValue(maxPacketCount));

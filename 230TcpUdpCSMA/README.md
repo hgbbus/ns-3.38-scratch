@@ -57,7 +57,7 @@ Total Bytes Received: 969624
 Throughput (Mbps): 0.969624
 ```
 
-__The Rx throughput amonts to 19% efficiency of theoretical bandwidth.__
+__The Rx throughput amounts to 19% efficiency of theoretical bandwidth.__
 
 After:
 ```C++
@@ -110,7 +110,7 @@ Received: 3652
 Rx Rate: 3.73965 Mbps
 ```
 
-__The Rx throughput amonts to 37% efficiency of theoretical bandwidth.__
+__The Rx throughput amounts to 37% efficiency of theoretical bandwidth.__
 Also note that the Rx rate is close to the Tx rate.  It is hard 
 to further increase the Rx rate due to the propagation delay.
 
@@ -134,7 +134,7 @@ Total Bytes Received: 1804712
 Throughput (Mbps): 1.80471
 ```
 
-__The Rx throughput amonts to 18% efficiency of theoretical bandwidth.__
+__The Rx throughput amounts to 18% efficiency of theoretical bandwidth.__
 
 After:
 ```C++
@@ -187,7 +187,7 @@ Received: 46528
 Rx Rate: 47.6447 Mbps
 ```
 
-__The Rx throughput amonts to 47.6% efficiency of theoretical bandwidth.__
+__The Rx throughput amounts to 47.6% efficiency of theoretical bandwidth.__
 It is hard to further increase the Rx rate due to the propagation delay.
 
 Here, if we increase the interpacket interval to 150us, the throughput 
@@ -228,7 +228,7 @@ Total Bytes Received: 23658496
 Throughput (Mbps): 23.6585
 ```
 
-__The Rx throughput amonts to 23.6% efficiency of theoretical bandwidth.__
+__The Rx throughput amounts to 23.6% efficiency of theoretical bandwidth.__
 
 After:
 ```C++
@@ -265,5 +265,108 @@ Throughput (Mbps): 44.9459
 ```
 __This result can only be slightly improved if the buffer size is further increased.__
 
+## Experiment 4: Link speed = 1Gbps, propagation delay = 503ns, default MTU = 1500.
+
+### UDP run: UDP packet size = 1024 bytes, interpacket interval = 8us.
+
+__Note: the interpacket interval is set to a value so that the Tx rate 
+is slightly higher than the link speed.__
+
+```
+% ./goUDP.sh
+Total Tx: 1024000000 bytes
+Tx Rate: 1024 Mbps
+Received: 827671
+Rx Rate: 847.535 Mbps
+```
+
+__The Rx throughput amounts to 85% efficiency of theoretical bandwidth.__
+It is hard to further increase the Rx rate due to the propagation delay.
+Decreasing the interpacket interval (increasing the Tx rate) does not 
+improve the throughput.
+
+__It is clear that the smaller the propagation delay, the better the efficiency.__
+It shows that reducing the interpacket interval won't always work. The 
+propagation delay plays a big role in the efficiency of a CSMA network.
+
+Increasing packet size to 1436 (helps with the throughput):
+```
+% ./goUDP.sh
+Total Tx: 1436000000 bytes
+Tx Rate: 1436 Mbps
+Received: 617047
+Rx Rate: 886.079 Mbps
+```
+The above result was from interpacket packet interval being 8us. If the 
+interpacket interval is increased to 10us, the throughput remains the same.
+
+### TCP Run
+
+Under default setting: TCP segment size = 536, both 
+TCP send and receive buffer sizes are 131072.
+
+```
+% ./goTCP.sh 
+Total Bytes Received: 469734400
+Throughput (Mbps): 469.734
+```
+
+__The Rx throughput amounts to 47% efficiency of theoretical bandwidth.__
+
+After:
+```C++
+    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1024));     // default 536
+```
+The throughput is improved.  See below:
+```
+% ./goTCP.sh
+Total Bytes Received: 552956928
+Throughput (Mbps): 552.957
+```
+
+Further increase:
+```C++
+    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1436));     // default 536
+```
+We have:
+```
+% ./goTCP.sh
+Total Bytes Received: 562828800
+Throughput (Mbps): 562.829
+```
+
+After increasing send/recv buffer:
+```C++
+    Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(1310720));   // default 131072
+    Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(1310720));   // default 131072
+```
+We have:
+```
+% ./goTCP.sh
+Total Bytes Received: 680455680
+Throughput (Mbps): 680.456
+```
+__This result can be further improved if the buffer size is further increased.__
+When the buffers are increased by a factor of 5, we have:
+```
+% ./goTCP.sh
+Total Bytes Received: 718802944
+Throughput (Mbps): 718.803
+```
+This may still be further improved if the buffer sizes are increased (but the 
+simulation becomes very slow).
+
+Increasing the SendSize of the BulkSendApplication also helps with improving 
+the throughput:
+```C++
+    Config::SetDefault("ns3::BulkSendApplication::SendSize", UintegerValue(1436));    // default 512
+```
+```
+% ./goTCP.sh
+Total Bytes Received: 745200712
+Throughput (Mbps): 745.201
+```
+The above result uses Socket buffer sizes of 1310720*5 with BulkSendApplication SendSize 
+set to 1436.  If I increase the SendSize to 1436*2, the result is the same.
 
 (End)
