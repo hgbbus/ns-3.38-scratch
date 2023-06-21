@@ -64,6 +64,11 @@ The following is the list of the scripts:
   A script that starts a number FTP downstream flows from FTP server nodes to LAN nodes. 
   This script allows the run of different queue disciplines for comparisons.
 
+* [210FTPCalib](210FTPCalib/README.md)
+
+  A script that helps determine the right parameters for simulations involving 
+  FTP types of flows in CSMA network.
+
 * [220TcpBulkSend](220TcpBulkSend/README.md)
 
   A script that is used to duplicate a TCP throughput issue and to find a solution 
