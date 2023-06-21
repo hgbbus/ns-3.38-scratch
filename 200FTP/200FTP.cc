@@ -227,9 +227,18 @@ main(int argc, char* argv[])
     // local net set to CSMA
     CsmaHelper csmaHelper;
     csmaHelper.SetChannelAttribute("DataRate", StringValue("1Gbps"));
-    csmaHelper.SetChannelAttribute("Delay", TimeValue(NanoSeconds(6560)));
-    // propagation delay is set to 20ns per foot for a 100 meter cable
-    //  (100m = 328ft, 328 x 20ns = 6560ns or 6.56us)
+    csmaHelper.SetChannelAttribute("Delay", TimeValue(NanoSeconds(656)));
+    // From flukenetworks.com knowledge-base:
+    //   https://www.flukenetworks.com/knowledge-base/dtx-cableanalyzer/propagation-delay
+    //
+    // Propagation delay, or delay, is a measure of the time required for a signal to propagate 
+    // from one end of the circuit to the other. Network propagation delay is measured in 
+    // nanoseconds (nS). Typical propagation delay for category 5e UTP is a bit less than 5 nS 
+    // per meter (worst case allowed is 5.7 nS/m). A 100 meter cable might have delay as shown 
+    // below. ... 503ns
+    //
+    // propagation delay is set to 2ns per foot for a 100 meter cable
+    //  (100m = 328ft, 328 x 2ns = 656ns)
     // this delay is low but CSMA delay (sensing, back-off, etc.) can be much higher
     if (devQType.length() == 0 || devQType == "DropTail") {
         csmaHelper.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(std::to_string(devQSize)+"p"));
@@ -253,8 +262,9 @@ main(int argc, char* argv[])
     inetStackHelper.Install(ftpNodes);
     inetStackHelper.Install(lanNodes);
 
-    TrafficControlHelper tch;
     if (qdType.length() != 0) {
+        TrafficControlHelper tch;
+
         // Different qdisc may require different parameters
         // The SetRootQueueDisc method can accept all sorts, varying number of config parameters!!
         if (qdType == "FqCoDel") {
@@ -306,9 +316,10 @@ main(int argc, char* argv[])
 
         // Enable BQL on netdevice queue
         tch.SetQueueLimits("ns3::DynamicQueueLimits", "HoldTime", StringValue(std::to_string(holdTime)+"ms"));
+
+        tch.Install(lanNodesNetDevices.Get(0));     // Only installed on LAN router node
+        //tch.Install(lanNodesNetDevices);          // This will install on all LAN nodes
     }
-    tch.Install(lanNodesNetDevices.Get(0));     // Only installed on LAN router node
-    //tch.Install(lanNodesNetDevices);          // This will install on all LAN nodes
 
     // When an IP address is assigned to an interface, default queue discipline
     // (pfifo_fast) gets installed for the traffic control layer of netdevices

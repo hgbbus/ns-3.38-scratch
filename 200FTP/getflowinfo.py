@@ -330,7 +330,7 @@ def main(argv):
         else:
             flowinfo += f'{flow.packetLossRatio*100:6.3f}'
         print(flowinfo)
-    print("Total " + "TxRate = " + f'{totTxRate*1.0e-6:6.2f} ' + "RxRate = " + f'{totRxRate*1.0e-6:6.2f}')
+    print("Total " + "TxRate = " + f'{totTxRate*1.0e-6:6.2f} ' + "RxRate = " + f'{totRxRate*1.0e-6:6.2f}' + " Mbps")
 
     print()
     print(header)
@@ -369,7 +369,7 @@ def main(argv):
         else:
             flowinfo += f'{flow.packetLossRatio*100:6.3f}'
         print(flowinfo)
-    print("Total " + "TxRate = " + f'{totTxRate*1.0e-6:6.2f} ' + "RxRate = " + f'{totRxRate*1.0e-6:6.2f}')
+    print("Total " + "TxRate = " + f'{totTxRate*1.0e-6:6.2f} ' + "RxRate = " + f'{totRxRate*1.0e-6:6.2f}' + " Mbps")
 
     print()
 
