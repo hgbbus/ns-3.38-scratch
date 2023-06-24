@@ -219,6 +219,7 @@ main(int argc, char* argv[])
     // Turn off ECN for now
     Config::SetDefault ("ns3::CoDelQueueDisc::UseEcn", BooleanValue (false));
     Config::SetDefault ("ns3::FqCoDelQueueDisc::UseEcn", BooleanValue (false));
+    Config::SetDefault ("ns3::ABBCoDelQueueDisc::UseEcn", BooleanValue (false));
     Config::SetDefault ("ns3::TcpSocketBase::UseEcn", StringValue ("Off"));
 
     //
@@ -355,7 +356,7 @@ main(int argc, char* argv[])
             tch.SetRootQueueDisc("ns3::ABBCoDelQueueDisc", 
                                 "MaxSize", StringValue(std::to_string(qdQSize)+"p"),
                                 "DropBatchSize", UintegerValue(1), // changed from 16 to 1
-                                "EffectiveChannelBW", DoubleValue(680.0),
+                                "ChannelBW", DoubleValue(1000.0),
                                 "FlowIdCb", CallbackValue(MakeCallback<uint32_t,Ptr<QueueDiscItem>>(&GetFlowId)),
                                 "FlowWeightCb", CallbackValue(MakeCallback<double,Ptr<QueueDiscItem>>(&GetFlowWeight)));
             // TODO: should we turn off ECN?

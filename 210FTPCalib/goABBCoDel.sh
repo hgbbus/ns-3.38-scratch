@@ -9,6 +9,10 @@ if [ ! -d "$OUTDIR" ]; then
   mkdir -p "$OUTDIR"
 fi
 
+# For ABB, we need to copy the flow table into the OUTDIR directory
+ABB_FLOW_TABLE="abb-flow-table.csv"
+cp $ABB_FLOW_TABLE $OUTDIR
+
 # Script name is extracted from its directory name
 THIS_SCRIPT=$(basename -- $CWD)
 

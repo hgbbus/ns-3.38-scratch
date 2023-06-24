@@ -15,7 +15,7 @@ THIS_SCRIPT=$(basename -- $CWD)
 # If you need to change simulation script parameters, 
 # this is the place to do it.
 #RUN="$THIS_SCRIPT --pingOn --tracing --nFTPs=5 --qdType=abc"
-PROG="$THIS_SCRIPT --nFTPs=1 --simTime=10 --qdType=Fifo -qdQSize=2000 --devQSize=200 --holdTime=1"
+PROG="$THIS_SCRIPT --heartBeatOn --nFTPs=5 --simTime=100 --qdType=Fifo -qdQSize=2000 --devQSize=200 --holdTime=1"
 
 # Run script using either 'waf' or newer 'ns3'
 cd $NS3DIR > /dev/null
